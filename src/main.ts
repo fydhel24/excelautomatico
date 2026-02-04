@@ -1,36 +1,29 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { AutomationService } from './automation/automation.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Habilitar CORS para desarrollo
-  app.enableCors();
+  // Habilitar CORS para Postman y desarrollo
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
   
-  // Puerto configurable
   const port = process.env.PORT || 3000;
   
   await app.listen(port);
-  console.log(`🚀 Aplicación corriendo en http://localhost:${port}`);
-  console.log(`📊 Endpoints disponibles:`);
-  console.log(`   POST /automation/download-excel`);
-  console.log(`   POST /automation/login`);
-  console.log(`   GET  /automation/download-path`);
-  
-  // ✅ EJECUTAR DESCARGA DE EXCEL AUTOMÁTICAMENTE AL INICIAR
-  console.log('\n╔═══════════════════════════════════════════════════════════╗');
-  console.log('║  EJECUTANDO DESCARGA DE EXCEL AUTOMÁTICAMENTE...          ║');
-  console.log('╚═══════════════════════════════════════════════════════════╝\n');
-  
-  const automationService = app.get(AutomationService);
-  
-  // Ejecutar la descarga de Excel
-  try {
-    await automationService.downloadExcel();
-  } catch (error) {
-    console.error('❌ Error ejecutando descarga automática:', error);
-  }
+  console.log(`🚀 NestJS API corriendo en http://localhost:${port}`);
+  console.log(`\n📊 ENDPOINTS DISPONIBLES:\n`);
+  console.log(`POST  /automation/download-and-send    - Descargar Excel y enviar a Laravel`);
+  console.log(`POST  /automation/download-excel        - Solo descargar Excel`);
+  console.log(`GET   /automation/list-files            - Listar archivos descargados`);
+  console.log(`POST  /automation/send-to-laravel       - Enviar archivo específico a Laravel`);
+  console.log(`POST  /automation/configure-laravel-url - Configurar URL de Laravel`);
+  console.log(`GET   /automation/laravel-url           - Obtener URL actual de Laravel`);
+  console.log(`GET   /automation/download-path         - Obtener ruta de descargas\n`);
+  console.log(`💡 Prueba los endpoints con Postman\n`);
 }
 
 bootstrap();
