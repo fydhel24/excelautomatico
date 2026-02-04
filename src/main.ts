@@ -14,24 +14,22 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`🚀 Aplicación corriendo en http://localhost:${port}`);
   console.log(`📊 Endpoints disponibles:`);
-  console.log(`   POST /automation/execute-full-flow`);
-  console.log(`   POST /automation/login`);
   console.log(`   POST /automation/download-excel`);
-  console.log(`   POST /automation/generate-qr`);
+  console.log(`   POST /automation/login`);
   console.log(`   GET  /automation/download-path`);
   
-  // ✅ EJECUTAR FLUJO AUTOMÁTICAMENTE AL INICIAR
+  // ✅ EJECUTAR DESCARGA DE EXCEL AUTOMÁTICAMENTE AL INICIAR
   console.log('\n╔═══════════════════════════════════════════════════════════╗');
-  console.log('║  EJECUTANDO FLUJO COMPLETO AUTOMÁTICAMENTE...             ║');
+  console.log('║  EJECUTANDO DESCARGA DE EXCEL AUTOMÁTICAMENTE...          ║');
   console.log('╚═══════════════════════════════════════════════════════════╝\n');
   
   const automationService = app.get(AutomationService);
   
-  // Ejecutar el flujo completo
+  // Ejecutar la descarga de Excel
   try {
-    await automationService.executeFullFlow();
+    await automationService.downloadExcel();
   } catch (error) {
-    console.error('❌ Error ejecutando flujo automático:', error);
+    console.error('❌ Error ejecutando descarga automática:', error);
   }
 }
 
