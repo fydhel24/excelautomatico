@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
+import { Browser, Page } from 'playwright'; // ✅ Importar de 'playwright'
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -13,6 +14,12 @@ chromium.use(StealthPlugin());
 export class AutomationService {
   private downloadPath: string;
   private laravelApiUrl: string = 'http://localhost:8000/api/movimientos/importar-desde-nestjs';
+  
+  // Variables para mantener sesión REALMENTE persistente
+  private browser: Browser | null = null;
+  private page: Page | null = null;
+  private isLoggedIn: boolean = false;
+  private currentPageUrl: string = '';
 
   constructor() {
     this.downloadPath = path.join(process.cwd(), 'descargas');
@@ -22,9 +29,62 @@ export class AutomationService {
     }
   }
 
-  // Método para descargar Excel y enviar a Laravel
-  async downloadExcelAndSendToLaravel(): Promise<any> {
-    console.log('🚀 Iniciando navegador Chromium...');
+  // Espera aleatoria
+  private async randomDelay(min: number, max: number) {
+    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    return new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  // Verificar si ya está logueado en la página actual
+  private async isAlreadyLoggedIn(page: Page): Promise<boolean> {
+    try {
+      // Verificar si el botón de Excel existe (solo aparece cuando está logueado)
+      const excelBtnExists = await page.evaluate(() => {
+        return document.querySelector('button[title="Exportar a Excel"]') !== null;
+      });
+
+      if (excelBtnExists) {
+        console.log('  ✓ Ya está logueado en la página actual');
+        return true;
+      }
+
+      // Verificar si estamos en la página de login
+      const currentUrl = page.url();
+      if (currentUrl.includes('AuthIAM/Index')) {
+        console.log('  ⚠️ Está en la página de login, necesita autenticarse');
+        return false;
+      }
+
+      // Intentar navegar a una página que requiere login
+      try {
+        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index    ', {
+          waitUntil: 'networkidle',
+          timeout: 10000
+        });
+        
+        // Si después de navegar aparece el botón de Excel, está logueado
+        const hasExcelBtn = await page.evaluate(() => {
+          return document.querySelector('button[title="Exportar a Excel"]') !== null;
+        });
+        
+        if (hasExcelBtn) {
+          console.log('  ✓ Sesión activa detectada');
+          return true;
+        }
+      } catch (navError) {
+        // Error de navegación puede significar que la sesión expiró
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error verificando login:', error.message);
+      return false;
+    }
+  }
+
+  // Iniciar navegador (solo una vez)
+  private async initializeBrowser(): Promise<{ browser: Browser; page: Page }> {
+    console.log('🚀 Iniciando navegador Chromium (primera vez)...');
     
     const browser = await chromium.launch({ 
       headless: false,
@@ -32,44 +92,105 @@ export class AutomationService {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--start-maximized'
       ]
     });
     
     const context = await browser.newContext({
-      acceptDownloads: true
+      acceptDownloads: true,
+      viewport: { width: 1366, height: 768 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
     
     const page = await context.newPage();
-    let excelPath = '';
+    
+    return { browser, page };
+  }
 
+  // Login (solo si no está logueado)
+  private async performLogin(page: Page): Promise<boolean> {
     try {
-      // --- PASO 1: LOGIN ---
-      console.log('\n📝 PASO 1: Iniciando sesión en BCP...');
-      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ', {
+      console.log('\n📝 Realizando login en BCP...');
+      
+      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index    ', {
         waitUntil: 'networkidle',
         timeout: 60000
       });
-      
+
       console.log('  → Rellenando credenciales...');
+      
+      // Rellenar campos
       await page.fill('#authname', 'CajaUno11929');
+      await this.randomDelay(300, 600);
       await page.fill('#authpass', '6ipzQ-5kOQ');
+      
+      await this.randomDelay(500, 1000);
       
       console.log('  → Haciendo clic en botón de login...');
       await page.click('#authbtn');
       
-      await page.waitForTimeout(3000);
+      // Esperar que cargue
+      await page.waitForTimeout(2000);
+      
       console.log('  ✓ Login exitoso\n');
+      return true;
 
-      // --- PASO 2: DESCARGA EXCEL ---
-      console.log('📊 PASO 2: Descargando reporte Excel...');
+    } catch (error) {
+      console.error('  ❌ Error en login:', error.message);
+      return false;
+    }
+  }
+
+  // Método principal: Descargar Excel y enviar a Laravel
+  async downloadExcelAndSendToLaravel(): Promise<any> {
+    let excelPath = '';
+
+    try {
+      // Verificar si ya hay un navegador iniciado
+      if (!this.browser || !this.page) {
+        console.log('🆕 Iniciando nueva sesión (primera vez)...\n');
+        const init = await this.initializeBrowser();
+        this.browser = init.browser;
+        this.page = init.page;
+        
+        // Realizar login
+        const loginSuccess = await this.performLogin(this.page);
+        if (!loginSuccess) {
+          throw new Error('Falló el login');
+        }
+        this.isLoggedIn = true;
+        this.currentPageUrl = this.page.url();
+      } else {
+        console.log('🔄 Reutilizando sesión existente...\n');
+        
+        // Verificar si ya está logueado
+        const alreadyLoggedIn = await this.isAlreadyLoggedIn(this.page);
+        
+        if (!alreadyLoggedIn) {
+          console.log('  ⚠️ Sesión no activa, realizando login...\n');
+          const loginSuccess = await this.performLogin(this.page);
+          if (!loginSuccess) {
+            throw new Error('Falló el login');
+          }
+          this.isLoggedIn = true;
+        } else {
+          console.log('  ✓ Sesión activa, procediendo a descargar Excel\n');
+          this.isLoggedIn = true;
+        }
+      }
+
+      // --- DESCARGA EXCEL ---
+      console.log('📊 Descargando reporte Excel...');
+      
       const excelBtn = 'button[title="Exportar a Excel"]';
-      await page.waitForSelector(excelBtn, { timeout: 30000 });
+      await this.page.waitForSelector(excelBtn, { timeout: 30000 });
       
       console.log('  → Haciendo clic en botón Exportar a Excel...');
+      
       const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 60000 }),
-        page.click(excelBtn),
+        this.page.waitForEvent('download', { timeout: 60000 }),
+        this.page.click(excelBtn),
       ]);
       
       const excelFileName = `Reporte_${Date.now()}.xlsx`;
@@ -78,8 +199,8 @@ export class AutomationService {
       
       console.log(`  ✓ Excel guardado: ${excelPath}\n`);
 
-      // --- PASO 3: ENVIAR A LARAVEL ---
-      console.log('📤 PASO 3: Enviando Excel a Laravel...');
+      // --- ENVIAR A LARAVEL ---
+      console.log('📤 Enviando Excel a Laravel...');
       const laravelResponse = await this.sendExcelToLaravel(excelPath);
       
       console.log('╔═══════════════════════════════════════════════════════════╗');
@@ -91,95 +212,34 @@ export class AutomationService {
         message: 'Excel descargado y enviado a Laravel exitosamente',
         excelPath,
         laravelResponse,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        reusedSession: this.isLoggedIn
       };
 
     } catch (error) {
       console.error('\n❌ ERROR en el proceso:', error.message);
+      
+      // Tomar screenshot del error
+      try {
+        if (this.page) {
+          const errorScreenshot = path.join(this.downloadPath, `error_${Date.now()}.png`);
+          await this.page.screenshot({ path: errorScreenshot });
+          console.log(`📸 Screenshot del error guardado: ${errorScreenshot}`);
+        }
+      } catch (screenshotError) {
+        console.error('No se pudo tomar screenshot:', screenshotError);
+      }
+      
       throw error;
     } finally {
       console.log('🏁 Proceso terminado.');
       console.log(`📁 Archivo guardado en: ${this.downloadPath}\n`);
-      // await browser.close();
+      console.log('💡 Navegador permanece abierto para próxima descarga\n');
     }
   }
 
-  // Método para solo descargar Excel
-  async downloadExcel(): Promise<any> {
-    console.log('🚀 Iniciando navegador Chromium...');
-    
-    const browser = await chromium.launch({ 
-      headless: false,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
-    
-    const context = await browser.newContext({
-      acceptDownloads: true
-    });
-    
-    const page = await context.newPage();
-
-    try {
-      console.log('\n📝 Iniciando sesión en BCP...');
-      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ', {
-        waitUntil: 'networkidle',
-        timeout: 60000
-      });
-      
-      console.log('  → Rellenando credenciales...');
-      await page.fill('#authname', 'CajaUno11929');
-      await page.fill('#authpass', '6ipzQ-5kOQ');
-      
-      console.log('  → Haciendo clic en botón de login...');
-      await page.click('#authbtn');
-      
-      await page.waitForTimeout(3000);
-      console.log('  ✓ Login exitoso\n');
-
-      console.log('📊 Descargando reporte Excel...');
-      const excelBtn = 'button[title="Exportar a Excel"]';
-      await page.waitForSelector(excelBtn, { timeout: 30000 });
-      
-      console.log('  → Haciendo clic en botón Exportar a Excel...');
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 60000 }),
-        page.click(excelBtn),
-      ]);
-      
-      const excelFileName = `Reporte_${Date.now()}.xlsx`;
-      const excelPath = path.join(this.downloadPath, excelFileName);
-      await download.saveAs(excelPath);
-      
-      console.log(`  ✓ Excel guardado: ${excelPath}\n`);
-
-      console.log('╔═══════════════════════════════════════════════════════════╗');
-      console.log('║  ✅ EXCEL DESCARGADO EXITOSAMENTE                         ║');
-      console.log('╚═══════════════════════════════════════════════════════════╝\n');
-
-      return {
-        success: true,
-        message: 'Excel descargado exitosamente',
-        excelPath,
-        fileName: excelFileName,
-        timestamp: new Date().toISOString()
-      };
-
-    } catch (error) {
-      console.error('\n❌ ERROR descargando Excel:', error.message);
-      throw error;
-    } finally {
-      console.log('🏁 Proceso terminado.\n');
-      // await browser.close();
-    }
-  }
-
-  // Método para enviar Excel existente a Laravel
-  async sendExcelToLaravel(excelPath: string): Promise<any> {
+  // Método para enviar Excel a Laravel
+  private async sendExcelToLaravel(excelPath: string): Promise<any> {
     try {
       if (!fs.existsSync(excelPath)) {
         throw new Error(`Archivo no encontrado: ${excelPath}`);
@@ -217,30 +277,6 @@ export class AutomationService {
     }
   }
 
-  // Método para enviar Excel por ruta de archivo
-  async sendFileToLaravel(filePath: string): Promise<any> {
-    const fullPath = path.join(this.downloadPath, filePath);
-    return this.sendExcelToLaravel(fullPath);
-  }
-
-  // Método para listar archivos descargados
-  listDownloadedFiles(): any[] {
-    try {
-      const files = fs.readdirSync(this.downloadPath);
-      return files
-        .filter(file => file.endsWith('.xlsx'))
-        .map(file => ({
-          name: file,
-          path: path.join(this.downloadPath, file),
-          size: fs.statSync(path.join(this.downloadPath, file)).size,
-          modified: fs.statSync(path.join(this.downloadPath, file)).mtime
-        }));
-    } catch (error) {
-      console.error('Error listando archivos:', error);
-      return [];
-    }
-  }
-
   // Método para cambiar la URL de Laravel
   setLaravelApiUrl(url: string) {
     this.laravelApiUrl = url;
@@ -248,5 +284,26 @@ export class AutomationService {
 
   getLaravelApiUrl() {
     return this.laravelApiUrl;
+  }
+
+  // Método para cerrar navegador manualmente
+  async closeBrowser() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.page = null;
+      this.isLoggedIn = false;
+      console.log('👋 Navegador cerrado');
+    }
+  }
+
+  // Método para verificar estado de la sesión
+  getSessionStatus() {
+    return {
+      browserActive: this.browser !== null,
+      pageActive: this.page !== null,
+      isLoggedIn: this.isLoggedIn,
+      currentPageUrl: this.currentPageUrl
+    };
   }
 }
