@@ -45,4 +45,5 @@ export class AutomationController {
       message: 'Navegador cerrado exitosamente'
     };
   }
+  
 }
