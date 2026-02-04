@@ -13,7 +13,7 @@ chromium.use(StealthPlugin());
 @Injectable()
 export class AutomationService {
   private downloadPath: string;
-  private laravelApiUrl: string = 'http://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs';
+  private laravelApiUrl: string = 'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs';
   
   // Variables para mantener sesión REALMENTE persistente
   private browser: Browser | null = null;
