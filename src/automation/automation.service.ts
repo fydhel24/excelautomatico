@@ -35,6 +35,42 @@ export class AutomationService {
     return new Promise(resolve => setTimeout(resolve, delay));
   }
 
+  // Espera con typing effect (simulación humana)
+  private async typeWithDelay(page: Page, selector: string, text: string) {
+    await page.click(selector);
+    await page.fill(selector, '');
+    
+    for (const char of text) {
+      await page.keyboard.type(char);
+      await this.randomDelay(50, 150); // Delay entre caracteres
+    }
+  }
+
+  // Simular comportamiento humano (mouse movement, scroll, etc.)
+  private async simulateHumanBehavior(page: Page) {
+    console.log('  → Simulando comportamiento humano...');
+    
+    // Espera aleatoria entre 1-3 segundos
+    await this.randomDelay(1000, 3000);
+    
+    // Scroll suave hacia abajo y arriba
+    try {
+      await page.evaluate(() => {
+        window.scrollTo({ top: 200, behavior: 'smooth' });
+      });
+      await this.randomDelay(500, 1000);
+      
+      await page.evaluate(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      await this.randomDelay(500, 1000);
+    } catch (e) {
+      // Ignorar errores de scroll en headless
+    }
+    
+    console.log('  ✓ Comportamiento humano simulado\n');
+  }
+
   // Verificar si ya está logueado en la página actual
   private async isAlreadyLoggedIn(page: Page): Promise<boolean> {
     try {
@@ -57,7 +93,7 @@ export class AutomationService {
 
       // Intentar navegar a una página que requiere login
       try {
-        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index      ', {
+        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index        ', {
           waitUntil: 'networkidle',
           timeout: 10000
         });
@@ -82,56 +118,78 @@ export class AutomationService {
     }
   }
 
-  // Iniciar navegador (solo una vez)
+  // Iniciar navegador (solo una vez) - CONFIGURACIÓN PARA LINUX
   private async initializeBrowser(): Promise<{ browser: Browser; page: Page }> {
-    console.log('🚀 Iniciando navegador Chromium (primera vez)...');
+    console.log('🚀 Iniciando navegador Chromium (modo headless para Linux)...');
     
     const browser = await chromium.launch({ 
-      headless: false,
+      headless: true, // ✅ MODO HEADLESS PARA LINUX
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--start-maximized'
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-default-apps',
+        '--disable-infobars',
+        '--window-size=1366,768',
+        '--disable-blink-features=AutomationControlled',
+        '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       ]
     });
     
     const context = await browser.newContext({
       acceptDownloads: true,
       viewport: { width: 1366, height: 768 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'es-ES',
+      timezoneId: 'America/La_Paz'
     });
     
     const page = await context.newPage();
     
+    // Evitar detección de bot
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+    });
+    
     return { browser, page };
   }
 
-  // Login (solo si no está logueado)
+  // Login (solo si no está logueado) - CON SIMULACIÓN HUMANA
   private async performLogin(page: Page): Promise<boolean> {
     try {
       console.log('\n📝 Realizando login en BCP...');
       
-      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index      ', {
+      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index        ', {
         waitUntil: 'networkidle',
         timeout: 60000
       });
 
-      console.log('  → Rellenando credenciales...');
+      // Simular comportamiento humano antes de login
+      await this.simulateHumanBehavior(page);
+
+      console.log('  → Rellenando credenciales con typing effect...');
       
-      // Rellenar campos
-      await page.fill('#authname', 'CajaUno11929');
+      // Usar typing effect para simular humano
+      await this.typeWithDelay(page, '#authname', 'CajaUno11929');
       await this.randomDelay(300, 600);
-      await page.fill('#authpass', '6ipzQ-5kOQ');
+      await this.typeWithDelay(page, '#authpass', '6ipzQ-5kOQ');
       
       await this.randomDelay(500, 1000);
       
       console.log('  → Haciendo clic en botón de login...');
+      
+      // Simular hover antes de clic (aunque sea headless)
+      await this.randomDelay(200, 500);
+      
       await page.click('#authbtn');
       
-      // Esperar que cargue
-      await page.waitForTimeout(2000);
+      // Esperar con timeout variable (simulación humana)
+      await this.randomDelay(2000, 4000);
       
       console.log('  ✓ Login exitoso\n');
       return true;
@@ -149,10 +207,10 @@ export class AutomationService {
     // Recargar la página actual
     await page.reload({
       waitUntil: 'networkidle',
-      timeout: 6000
+      timeout: 60000
     });
     
-    // Esperar un poco para que los datos se actualicen
+    // Esperar un poco para que los datos se actualicen (simulación humana)
     await this.randomDelay(2000, 3000);
     
     console.log('  ✓ Página recargada con datos actualizados\n');
@@ -170,7 +228,7 @@ export class AutomationService {
         this.browser = init.browser;
         this.page = init.page;
         
-        // Realizar login
+        // Realizar login con simulación humana
         const loginSuccess = await this.performLogin(this.page);
         if (!loginSuccess) {
           throw new Error('Falló el login');
@@ -239,7 +297,7 @@ export class AutomationService {
     } catch (error) {
       console.error('\n❌ ERROR en el proceso:', error.message);
       
-      // Tomar screenshot del error
+      // Tomar screenshot del error (funciona en headless)
       try {
         if (this.page) {
           const errorScreenshot = path.join(this.downloadPath, `error_${Date.now()}.png`);
