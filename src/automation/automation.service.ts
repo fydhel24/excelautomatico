@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
-import { Browser, Page } from 'playwright'; // ✅ Importar de 'playwright'
+import { Browser, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -57,7 +57,7 @@ export class AutomationService {
 
       // Intentar navegar a una página que requiere login
       try {
-        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index    ', {
+        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index      ', {
           waitUntil: 'networkidle',
           timeout: 10000
         });
@@ -113,7 +113,7 @@ export class AutomationService {
     try {
       console.log('\n📝 Realizando login en BCP...');
       
-      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index    ', {
+      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index      ', {
         waitUntil: 'networkidle',
         timeout: 60000
       });
@@ -140,6 +140,22 @@ export class AutomationService {
       console.error('  ❌ Error en login:', error.message);
       return false;
     }
+  }
+
+  // Recargar página para obtener datos actualizados
+  private async refreshPageForLatestData(page: Page): Promise<void> {
+    console.log('🔄 Recargando página para obtener datos actualizados...');
+    
+    // Recargar la página actual
+    await page.reload({
+      waitUntil: 'networkidle',
+      timeout: 6000
+    });
+    
+    // Esperar un poco para que los datos se actualicen
+    await this.randomDelay(2000, 3000);
+    
+    console.log('  ✓ Página recargada con datos actualizados\n');
   }
 
   // Método principal: Descargar Excel y enviar a Laravel
@@ -175,7 +191,11 @@ export class AutomationService {
           }
           this.isLoggedIn = true;
         } else {
-          console.log('  ✓ Sesión activa, procediendo a descargar Excel\n');
+          console.log('  ✓ Sesión activa detectada\n');
+          
+          // ✅ RECARGAR PÁGINA PARA OBTENER DATOS ACTUALIZADOS
+          await this.refreshPageForLatestData(this.page);
+          
           this.isLoggedIn = true;
         }
       }
