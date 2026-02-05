@@ -14,7 +14,7 @@ chromium.use(StealthPlugin());
 export class AutomationService {
   private downloadPath: string;
   private laravelApiUrl: string =
-    'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs  ';
+    'https://importadoramiranda.com/api/movimientos/importar-desde-nestjs  ';
 
   private browser: Browser | null = null;
   private page: Page | null = null;
