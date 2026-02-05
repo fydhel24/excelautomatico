@@ -1,4 +1,6 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+// src/automation/automation.controller.ts
+import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { AuthTokenGuard } from '../auth/auth.guard';
 import { 
   ApiTags, 
   ApiOperation, 
@@ -10,6 +12,7 @@ import { AutomationService } from './automation.service';
 
 @ApiTags('automatización')
 @Controller('automation')
+@UseGuards(AuthTokenGuard)
 export class AutomationController {
   constructor(private readonly automationService: AutomationService) {}
 
@@ -27,8 +30,13 @@ export class AutomationController {
           description: 'URL completa del endpoint Laravel para recibir Excel',
           example: 'http://localhost:3000/api/movimientos/importar-desde-nestjs' 
         },
+        auth_token: {
+          type: 'string',
+          description: 'Token de autenticación único',
+          example: ''
+        }
       },
-      required: ['url'],
+      required: ['url', 'auth_token'],
     },
   })
   @ApiResponse({ 
@@ -42,17 +50,7 @@ export class AutomationController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'URL no proporcionada',
-    schema: {
-      example: { 
-        success: false, 
-        message: 'El campo "url" es requerido' 
-      }
-    }
-  })
-  configureLaravelUrl(@Body() body: { url: string }) {
+  configureLaravelUrl(@Body() body: { url: string; auth_token: string }) {
     if (!body.url) {
       return {
         success: false,
@@ -73,6 +71,19 @@ export class AutomationController {
     summary: 'Descargar Excel y enviar a Laravel',
     description: 'Ejecuta el proceso completo de automatización: inicia sesión en BCP Bolivia, descarga archivo Excel con movimientos y lo envía al backend Laravel configurado'
   })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        auth_token: {
+          type: 'string',
+          description: 'Token de autenticación único',
+          example: ''
+        }
+      },
+      required: ['auth_token'],
+    },
+  })
   @ApiResponse({ 
     status: 200, 
     description: 'Proceso completado exitosamente',
@@ -91,17 +102,7 @@ export class AutomationController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 500, 
-    description: 'Error en el proceso de automatización',
-    schema: {
-      example: { 
-        success: false, 
-        message: 'Error en el proceso: Falló el login' 
-      }
-    }
-  })
-  async downloadAndSendToLaravel() {
+  async downloadAndSendToLaravel(@Body() body: { auth_token: string }) {
     return this.automationService.downloadExcelAndSendToLaravel();
   }
 
@@ -119,7 +120,7 @@ export class AutomationController {
         browserActive: true,
         pageActive: true,
         isLoggedIn: true,
-        currentPageUrl: 'https://apppro.bcp.com.bo/Multiplica/Dashboard',
+        currentPageUrl: 'https://apppro.bcp.com.bo/Multiplica/Dashboard  ',
         message: 'Sesión activa y lista para descargar'
       }
     }
@@ -138,6 +139,19 @@ export class AutomationController {
     summary: 'Cerrar navegador manualmente',
     description: 'Cierra la instancia del navegador Playwright y limpia la sesión. Útil para liberar recursos o reiniciar la sesión'
   })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        auth_token: {
+          type: 'string',
+          description: 'Token de autenticación único',
+          example: ''
+        }
+      },
+      required: ['auth_token'],
+    },
+  })
   @ApiResponse({ 
     status: 200, 
     description: 'Navegador cerrado exitosamente',
@@ -148,7 +162,7 @@ export class AutomationController {
       }
     }
   })
-  async closeBrowser() {
+  async closeBrowser(@Body() body: { auth_token: string }) {
     await this.automationService.closeBrowser();
     return {
       success: true,
