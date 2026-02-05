@@ -13,350 +13,249 @@ chromium.use(StealthPlugin());
 @Injectable()
 export class AutomationService {
   private downloadPath: string;
-  private laravelApiUrl: string = 'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs';
-  
-  // Variables para mantener sesión REALMENTE persistente
+  private laravelApiUrl: string =
+    'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs';
+
   private browser: Browser | null = null;
   private page: Page | null = null;
-  private isLoggedIn: boolean = false;
-  private currentPageUrl: string = '';
+  private isLoggedIn = false;
+  private currentPageUrl = '';
 
   constructor() {
     this.downloadPath = path.join(process.cwd(), 'descargas');
     if (!fs.existsSync(this.downloadPath)) {
       fs.mkdirSync(this.downloadPath, { recursive: true });
-      console.log(`📁 Directorio de descargas creado: ${this.downloadPath}`);
+      console.log(`📁 [INIT] Directorio creado: ${this.downloadPath}`);
     }
   }
 
-  // Espera aleatoria
+  /* ─────────── UTILIDADES ─────────── */
+
   private async randomDelay(min: number, max: number) {
     const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    console.log(`⏳ [DELAY] ${delay} ms`);
     return new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  // Espera con typing effect (simulación humana)
   private async typeWithDelay(page: Page, selector: string, text: string) {
-    await page.click(selector);
+    console.log(`⌨️ [TYPE] Escribiendo en ${selector}`);
     await page.fill(selector, '');
-    
     for (const char of text) {
       await page.keyboard.type(char);
-      await this.randomDelay(50, 150); // Delay entre caracteres
+      await this.randomDelay(30, 70);
     }
   }
 
-  // Simular comportamiento humano (mouse movement, scroll, etc.)
   private async simulateHumanBehavior(page: Page) {
-    console.log('  → Simulando comportamiento humano...');
-    
-    // Espera aleatoria entre 1-3 segundos
-    await this.randomDelay(1000, 3000);
-    
-    // Scroll suave hacia abajo y arriba
+    console.log('🧠 [HUMAN] Simulando comportamiento humano...');
+    await this.randomDelay(300, 600);
+
     try {
-      await page.evaluate(() => {
-        window.scrollTo({ top: 200, behavior: 'smooth' });
-      });
-      await this.randomDelay(500, 1000);
-      
-      await page.evaluate(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      await this.randomDelay(500, 1000);
-    } catch (e) {
-      // Ignorar errores de scroll en headless
+      await page.evaluate(() => window.scrollTo(0, 150));
+      await this.randomDelay(200, 400);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      console.log('🧠 [HUMAN] Scroll simulado');
+    } catch {
+      console.log('⚠️ [HUMAN] Scroll omitido');
     }
-    
-    console.log('  ✓ Comportamiento humano simulado\n');
   }
 
-  // Verificar si ya está logueado en la página actual
+  /* ─────────── CHECK LOGIN ─────────── */
+
   private async isAlreadyLoggedIn(page: Page): Promise<boolean> {
+    console.log('🔍 [CHECK] Verificando si sesión está activa...');
     try {
-      // Verificar si el botón de Excel existe (solo aparece cuando está logueado)
-      const excelBtnExists = await page.evaluate(() => {
-        return document.querySelector('button[title="Exportar a Excel"]') !== null;
-      });
+      const logged =
+        (await page.$('button[title="Exportar a Excel"]')) !== null;
 
-      if (excelBtnExists) {
-        console.log('  ✓ Ya está logueado en la página actual');
-        return true;
-      }
+      console.log(
+        logged
+          ? '✅ [CHECK] Sesión activa detectada'
+          : '❌ [CHECK] Sesión NO activa',
+      );
 
-      // Verificar si estamos en la página de login
-      const currentUrl = page.url();
-      if (currentUrl.includes('AuthIAM/Index')) {
-        console.log('  ⚠️ Está en la página de login, necesita autenticarse');
-        return false;
-      }
-
-      // Intentar navegar a una página que requiere login
-      try {
-        await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index        ', {
-          waitUntil: 'networkidle',
-          timeout: 10000
-        });
-        
-        // Si después de navegar aparece el botón de Excel, está logueado
-        const hasExcelBtn = await page.evaluate(() => {
-          return document.querySelector('button[title="Exportar a Excel"]') !== null;
-        });
-        
-        if (hasExcelBtn) {
-          console.log('  ✓ Sesión activa detectada');
-          return true;
-        }
-      } catch (navError) {
-        // Error de navegación puede significar que la sesión expiró
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Error verificando login:', error.message);
+      return logged;
+    } catch {
+      console.log('⚠️ [CHECK] Error verificando login');
       return false;
     }
   }
 
-  // Iniciar navegador (solo una vez) - CONFIGURACIÓN PARA LINUX
+  /* ─────────── INIT BROWSER ─────────── */
+
   private async initializeBrowser(): Promise<{ browser: Browser; page: Page }> {
-    console.log('🚀 Iniciando navegador Chromium (modo headless para Linux)...');
-    
-    const browser = await chromium.launch({ 
-      headless: true, // ✅ MODO HEADLESS PARA LINUX
+    console.log('🚀 [BROWSER] Iniciando Chromium (headless)...');
+
+    const browser = await chromium.launch({
+      headless: true,
       args: [
         '--no-sandbox',
-        '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-default-apps',
-        '--disable-infobars',
-        '--window-size=1366,768',
         '--disable-blink-features=AutomationControlled',
-        '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      ]
+        '--window-size=1366,768',
+      ],
     });
-    
+
+    console.log('🧩 [BROWSER] Creando contexto...');
     const context = await browser.newContext({
       acceptDownloads: true,
       viewport: { width: 1366, height: 768 },
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'es-ES',
-      timezoneId: 'America/La_Paz'
+      timezoneId: 'America/La_Paz',
+      userAgent:
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
     });
-    
+
     const page = await context.newPage();
-    
-    // Evitar detección de bot
+
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', {
-        get: () => undefined
+        get: () => undefined,
       });
     });
-    
+
+    console.log('✅ [BROWSER] Navegador listo');
     return { browser, page };
   }
 
-  // Login (solo si no está logueado) - CON SIMULACIÓN HUMANA
-  private async performLogin(page: Page): Promise<boolean> {
-    try {
-      console.log('\n📝 Realizando login en BCP...');
-      
-      await page.goto('https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index        ', {
-        waitUntil: 'networkidle',
-        timeout: 60000
-      });
+  /* ─────────── LOGIN ─────────── */
 
-      // Simular comportamiento humano antes de login
+  private async performLogin(page: Page): Promise<boolean> {
+    console.log('🔐 [LOGIN] Iniciando proceso de login...');
+
+    try {
+      await page.goto(
+        'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index',
+        { waitUntil: 'domcontentloaded', timeout: 30000 },
+      );
+
+      console.log('🌐 [LOGIN] Página de login cargada');
+
       await this.simulateHumanBehavior(page);
 
-      console.log('  → Rellenando credenciales con typing effect...');
-      
-      // Usar typing effect para simular humano
       await this.typeWithDelay(page, '#authname', 'CajaUno11929');
-      await this.randomDelay(300, 600);
+      await this.randomDelay(150, 300);
       await this.typeWithDelay(page, '#authpass', '6ipzQ-5kOQ');
-      
-      await this.randomDelay(500, 1000);
-      
-      console.log('  → Haciendo clic en botón de login...');
-      
-      // Simular hover antes de clic (aunque sea headless)
-      await this.randomDelay(200, 500);
-      
-      await page.click('#authbtn');
-      
-      // Esperar con timeout variable (simulación humana)
-      await this.randomDelay(2000, 4000);
-      
-      console.log('  ✓ Login exitoso\n');
-      return true;
 
+      console.log('🖱️ [LOGIN] Enviando formulario...');
+
+      await Promise.all([
+        page.waitForNavigation({
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        }),
+        page.click('#authbtn'),
+      ]);
+
+      this.isLoggedIn = true;
+      this.currentPageUrl = page.url();
+
+      console.log('✅ [LOGIN] Login exitoso');
+      console.log(`📍 [LOGIN] URL actual: ${this.currentPageUrl}`);
+
+      return true;
     } catch (error) {
-      console.error('  ❌ Error en login:', error.message);
+      console.error('❌ [LOGIN] Error en login:', error.message);
       return false;
     }
   }
 
-  // Recargar página para obtener datos actualizados
-  private async refreshPageForLatestData(page: Page): Promise<void> {
-    console.log('🔄 Recargando página para obtener datos actualizados...');
-    
-    // Recargar la página actual
+  /* ─────────── REFRESH ─────────── */
+
+  private async refreshPageForLatestData(page: Page) {
+    console.log('🔄 [REFRESH] Recargando página...');
     await page.reload({
-      waitUntil: 'networkidle',
-      timeout: 60000
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
     });
-    
-    // Esperar un poco para que los datos se actualicen (simulación humana)
-    await this.randomDelay(2000, 3000);
-    
-    console.log('  ✓ Página recargada con datos actualizados\n');
+    await this.randomDelay(600, 900);
+    console.log('✅ [REFRESH] Página actualizada');
   }
 
-  // Método principal: Descargar Excel y enviar a Laravel
-  async downloadExcelAndSendToLaravel(): Promise<any> {
+  /* ─────────── MAIN ─────────── */
+
+  async downloadExcelAndSendToLaravel() {
+    console.log('▶️ [START] Proceso iniciado');
+
     let excelPath = '';
 
-    try {
-      // Verificar si ya hay un navegador iniciado
-      if (!this.browser || !this.page) {
-        console.log('🆕 Iniciando nueva sesión (primera vez)...\n');
-        const init = await this.initializeBrowser();
-        this.browser = init.browser;
-        this.page = init.page;
-        
-        // Realizar login con simulación humana
-        const loginSuccess = await this.performLogin(this.page);
-        if (!loginSuccess) {
+    if (!this.browser || !this.page) {
+      console.log('🆕 [SESSION] Nueva sesión');
+      const init = await this.initializeBrowser();
+      this.browser = init.browser;
+      this.page = init.page;
+
+      if (!(await this.performLogin(this.page))) {
+        throw new Error('Falló el login');
+      }
+    } else {
+      console.log('♻️ [SESSION] Reutilizando sesión');
+
+      if (!(await this.isAlreadyLoggedIn(this.page))) {
+        console.log('🔑 [SESSION] Sesión expirada, relogin');
+        if (!(await this.performLogin(this.page))) {
           throw new Error('Falló el login');
         }
-        this.isLoggedIn = true;
-        this.currentPageUrl = this.page.url();
       } else {
-        console.log('🔄 Reutilizando sesión existente...\n');
-        
-        // Verificar si ya está logueado
-        const alreadyLoggedIn = await this.isAlreadyLoggedIn(this.page);
-        
-        if (!alreadyLoggedIn) {
-          console.log('  ⚠️ Sesión no activa, realizando login...\n');
-          const loginSuccess = await this.performLogin(this.page);
-          if (!loginSuccess) {
-            throw new Error('Falló el login');
-          }
-          this.isLoggedIn = true;
-        } else {
-          console.log('  ✓ Sesión activa detectada\n');
-          
-          // ✅ RECARGAR PÁGINA PARA OBTENER DATOS ACTUALIZADOS
-          await this.refreshPageForLatestData(this.page);
-          
-          this.isLoggedIn = true;
-        }
+        await this.refreshPageForLatestData(this.page);
       }
-
-      // --- DESCARGA EXCEL ---
-      console.log('📊 Descargando reporte Excel...');
-      
-      const excelBtn = 'button[title="Exportar a Excel"]';
-      await this.page.waitForSelector(excelBtn, { timeout: 30000 });
-      
-      console.log('  → Haciendo clic en botón Exportar a Excel...');
-      
-      const [download] = await Promise.all([
-        this.page.waitForEvent('download', { timeout: 60000 }),
-        this.page.click(excelBtn),
-      ]);
-      
-      const excelFileName = `Reporte_${Date.now()}.xlsx`;
-      excelPath = path.join(this.downloadPath, excelFileName);
-      await download.saveAs(excelPath);
-      
-      console.log(`  ✓ Excel guardado: ${excelPath}\n`);
-
-      // --- ENVIAR A LARAVEL ---
-      console.log('📤 Enviando Excel a Laravel...');
-      const laravelResponse = await this.sendExcelToLaravel(excelPath);
-      
-      console.log('╔═══════════════════════════════════════════════════════════╗');
-      console.log('║  ✅ PROCESO COMPLETADO EXITOSAMENTE                       ║');
-      console.log('╚═══════════════════════════════════════════════════════════╝\n');
-
-      return {
-        success: true,
-        message: 'Excel descargado y enviado a Laravel exitosamente',
-        excelPath,
-        laravelResponse,
-        timestamp: new Date().toISOString(),
-        reusedSession: this.isLoggedIn
-      };
-
-    } catch (error) {
-      console.error('\n❌ ERROR en el proceso:', error.message);
-      
-      // Tomar screenshot del error (funciona en headless)
-      try {
-        if (this.page) {
-          const errorScreenshot = path.join(this.downloadPath, `error_${Date.now()}.png`);
-          await this.page.screenshot({ path: errorScreenshot });
-          console.log(`📸 Screenshot del error guardado: ${errorScreenshot}`);
-        }
-      } catch (screenshotError) {
-        console.error('No se pudo tomar screenshot:', screenshotError);
-      }
-      
-      throw error;
-    } finally {
-      console.log('🏁 Proceso terminado.');
-      console.log(`📁 Archivo guardado en: ${this.downloadPath}\n`);
-      console.log('💡 Navegador permanece abierto para próxima descarga\n');
     }
+
+    console.log('📊 [EXCEL] Buscando botón Exportar...');
+    const excelBtn = 'button[title="Exportar a Excel"]';
+    await this.page!.waitForSelector(excelBtn, { timeout: 20000 });
+
+    console.log('⬇️ [EXCEL] Descargando archivo...');
+    const [download] = await Promise.all([
+      this.page!.waitForEvent('download', { timeout: 30000 }),
+      this.page!.click(excelBtn),
+    ]);
+
+    excelPath = path.join(
+      this.downloadPath,
+      `Reporte_${Date.now()}.xlsx`,
+    );
+
+    await download.saveAs(excelPath);
+    console.log(`✅ [EXCEL] Guardado en ${excelPath}`);
+
+    console.log('📤 [LARAVEL] Enviando archivo...');
+    const laravelResponse = await this.sendExcelToLaravel(excelPath);
+
+    console.log('🏁 [END] Proceso completado');
+
+    return {
+      success: true,
+      message: 'Excel descargado y enviado a Laravel exitosamente',
+      excelPath,
+      laravelResponse,
+      timestamp: new Date().toISOString(),
+      reusedSession: this.isLoggedIn,
+    };
   }
 
-  // Método para enviar Excel a Laravel
-  private async sendExcelToLaravel(excelPath: string): Promise<any> {
-    try {
-      if (!fs.existsSync(excelPath)) {
-        throw new Error(`Archivo no encontrado: ${excelPath}`);
-      }
+  /* ─────────── LARAVEL ─────────── */
 
-      const formData = new FormData();
-      formData.append('archivo_excel', fs.createReadStream(excelPath));
-      formData.append('origen', 'nestjs');
+  private async sendExcelToLaravel(excelPath: string) {
+    const formData = new FormData();
+    formData.append('archivo_excel', fs.createReadStream(excelPath));
+    formData.append('origen', 'nestjs');
 
-      console.log(`  → Enviando a: ${this.laravelApiUrl}`);
-      
-      const response = await axios.post(this.laravelApiUrl, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'Accept': 'application/json'
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        timeout: 60000
-      });
+    const response = await axios.post(this.laravelApiUrl, formData, {
+      headers: formData.getHeaders(),
+      timeout: 30000,
+      maxBodyLength: Infinity,
+    });
 
-      console.log(`  ✓ Laravel respondió: ${response.status} - ${response.data.message || 'OK'}\n`);
-      
-      return response.data;
-
-    } catch (error) {
-      console.error('  ❌ Error enviando a Laravel:', error.message);
-      
-      if (error.response) {
-        console.error('  Response ', error.response.data);
-        console.error('  Status:', error.response.status);
-      }
-      
-      throw new Error(`Error enviando Excel a Laravel: ${error.message}`);
-    }
+    console.log('✅ [LARAVEL] Archivo enviado correctamente');
+    return response.data;
   }
 
-  // Método para cambiar la URL de Laravel
+  /* ─────────── API PÚBLICA ─────────── */
+
   setLaravelApiUrl(url: string) {
+    console.log(`🔧 [CONFIG] Laravel URL actualizada: ${url}`);
     this.laravelApiUrl = url;
   }
 
@@ -364,24 +263,22 @@ export class AutomationService {
     return this.laravelApiUrl;
   }
 
-  // Método para cerrar navegador manualmente
   async closeBrowser() {
     if (this.browser) {
+      console.log('👋 [BROWSER] Cerrando navegador');
       await this.browser.close();
       this.browser = null;
       this.page = null;
       this.isLoggedIn = false;
-      console.log('👋 Navegador cerrado');
     }
   }
 
-  // Método para verificar estado de la sesión
   getSessionStatus() {
     return {
       browserActive: this.browser !== null,
       pageActive: this.page !== null,
       isLoggedIn: this.isLoggedIn,
-      currentPageUrl: this.currentPageUrl
+      currentPageUrl: this.currentPageUrl,
     };
   }
 }
