@@ -14,12 +14,18 @@ chromium.use(StealthPlugin());
 export class AutomationService {
   private downloadPath: string;
   private laravelApiUrl: string =
-    'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs';
+    'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs  ';
 
   private browser: Browser | null = null;
   private page: Page | null = null;
   private isLoggedIn = false;
   private currentPageUrl = '';
+
+  // Variables para la sesión alternativa
+  private browserAlt: Browser | null = null;
+  private pageAlt: Page | null = null;
+  private isLoggedInAlt = false;
+  private currentPageUrlAlt = '';
 
   constructor() {
     this.downloadPath = path.join(process.cwd(), 'descargas');
@@ -119,14 +125,14 @@ export class AutomationService {
     return { browser, page };
   }
 
-  /* ─────────── LOGIN ─────────── */
+  /* ─────────── LOGIN PRINCIPAL ─────────── */
 
   private async performLogin(page: Page): Promise<boolean> {
-    console.log('🔐 [LOGIN] Iniciando proceso de login...');
+    console.log('🔐 [LOGIN] Iniciando proceso de login (credenciales principales)...');
 
     try {
       await page.goto(
-        'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index',
+        'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ',
         { waitUntil: 'domcontentloaded', timeout: 30000 },
       );
 
@@ -134,6 +140,7 @@ export class AutomationService {
 
       await this.simulateHumanBehavior(page);
 
+      // Credenciales principales
       await this.typeWithDelay(page, '#authname', 'CajaUno11929');
       await this.randomDelay(150, 300);
       await this.typeWithDelay(page, '#authpass', '6ipzQ-5kOQ');
@@ -161,6 +168,49 @@ export class AutomationService {
     }
   }
 
+  /* ─────────── LOGIN ALTERNATIVO ─────────── */
+
+  private async performLoginAlt(page: Page): Promise<boolean> {
+    console.log('🔐 [LOGIN-ALT] Iniciando proceso de login (credenciales alternativas)...');
+
+    try {
+      await page.goto(
+        'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ',
+        { waitUntil: 'domcontentloaded', timeout: 30000 },
+      );
+
+      console.log('🌐 [LOGIN-ALT] Página de login cargada');
+
+      await this.simulateHumanBehavior(page);
+
+      // Credenciales alternativas - REEMPLAZA ESTOS VALORES CON LAS CREDENCIALES REALES
+      await this.typeWithDelay(page, '#authname', 'CajaLive114559');
+      await this.randomDelay(150, 300);
+      await this.typeWithDelay(page, '#authpass', 'hXDfP-cj2w');
+
+      console.log('🖱️ [LOGIN-ALT] Enviando formulario...');
+
+      await Promise.all([
+        page.waitForNavigation({
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        }),
+        page.click('#authbtn'),
+      ]);
+
+      this.isLoggedInAlt = true;
+      this.currentPageUrlAlt = page.url();
+
+      console.log('✅ [LOGIN-ALT] Login exitoso');
+      console.log(`📍 [LOGIN-ALT] URL actual: ${this.currentPageUrlAlt}`);
+
+      return true;
+    } catch (error) {
+      console.error('❌ [LOGIN-ALT] Error en login:', error.message);
+      return false;
+    }
+  }
+
   /* ─────────── REFRESH ─────────── */
 
   private async refreshPageForLatestData(page: Page) {
@@ -173,29 +223,29 @@ export class AutomationService {
     console.log('✅ [REFRESH] Página actualizada');
   }
 
-  /* ─────────── MAIN ─────────── */
+  /* ─────────── MAIN PRINCIPAL ─────────── */
 
   async downloadExcelAndSendToLaravel() {
-    console.log('▶️ [START] Proceso iniciado');
+    console.log('▶️ [START] Proceso iniciado (credenciales principales)');
 
     let excelPath = '';
 
     if (!this.browser || !this.page) {
-      console.log('🆕 [SESSION] Nueva sesión');
+      console.log('🆕 [SESSION] Nueva sesión principal');
       const init = await this.initializeBrowser();
       this.browser = init.browser;
       this.page = init.page;
 
       if (!(await this.performLogin(this.page))) {
-        throw new Error('Falló el login');
+        throw new Error('Falló el login con credenciales principales');
       }
     } else {
-      console.log('♻️ [SESSION] Reutilizando sesión');
+      console.log('♻️ [SESSION] Reutilizando sesión principal');
 
       if (!(await this.isAlreadyLoggedIn(this.page))) {
         console.log('🔑 [SESSION] Sesión expirada, relogin');
         if (!(await this.performLogin(this.page))) {
-          throw new Error('Falló el login');
+          throw new Error('Falló el login con credenciales principales');
         }
       } else {
         await this.refreshPageForLatestData(this.page);
@@ -223,7 +273,7 @@ export class AutomationService {
     console.log('📤 [LARAVEL] Enviando archivo...');
     const laravelResponse = await this.sendExcelToLaravel(excelPath);
 
-    console.log('🏁 [END] Proceso completado');
+    console.log('🏁 [END] Proceso completado (credenciales principales)');
 
     return {
       success: true,
@@ -232,6 +282,68 @@ export class AutomationService {
       laravelResponse,
       timestamp: new Date().toISOString(),
       reusedSession: this.isLoggedIn,
+    };
+  }
+
+  /* ─────────── MAIN ALTERNATIVO ─────────── */
+
+  async downloadExcelAndSendToLaravelAlt() {
+    console.log('▶️ [START] Proceso iniciado (credenciales alternativas)');
+
+    let excelPath = '';
+
+    if (!this.browserAlt || !this.pageAlt) {
+      console.log('🆕 [SESSION-ALT] Nueva sesión alternativa');
+      const init = await this.initializeBrowser();
+      this.browserAlt = init.browser;
+      this.pageAlt = init.page;
+
+      if (!(await this.performLoginAlt(this.pageAlt))) {
+        throw new Error('Falló el login con credenciales alternativas');
+      }
+    } else {
+      console.log('♻️ [SESSION-ALT] Reutilizando sesión alternativa');
+
+      if (!(await this.isAlreadyLoggedIn(this.pageAlt))) {
+        console.log('🔑 [SESSION-ALT] Sesión expirada, relogin');
+        if (!(await this.performLoginAlt(this.pageAlt))) {
+          throw new Error('Falló el login con credenciales alternativas');
+        }
+      } else {
+        await this.refreshPageForLatestData(this.pageAlt);
+      }
+    }
+
+    console.log('📊 [EXCEL-ALT] Buscando botón Exportar...');
+    const excelBtn = 'button[title="Exportar a Excel"]';
+    await this.pageAlt!.waitForSelector(excelBtn, { timeout: 20000 });
+
+    console.log('⬇️ [EXCEL-ALT] Descargando archivo...');
+    const [download] = await Promise.all([
+      this.pageAlt!.waitForEvent('download', { timeout: 30000 }),
+      this.pageAlt!.click(excelBtn),
+    ]);
+
+    excelPath = path.join(
+      this.downloadPath,
+      `ReporteAlt_${Date.now()}.xlsx`,
+    );
+
+    await download.saveAs(excelPath);
+    console.log(`✅ [EXCEL-ALT] Guardado en ${excelPath}`);
+
+    console.log('📤 [LARAVEL-ALT] Enviando archivo...');
+    const laravelResponse = await this.sendExcelToLaravel(excelPath);
+
+    console.log('🏁 [END] Proceso completado (credenciales alternativas)');
+
+    return {
+      success: true,
+      message: 'Excel descargado y enviado a Laravel exitosamente (usando credenciales alternativas)',
+      excelPath,
+      laravelResponse,
+      timestamp: new Date().toISOString(),
+      reusedSession: this.isLoggedInAlt,
     };
   }
 
@@ -265,11 +377,19 @@ export class AutomationService {
 
   async closeBrowser() {
     if (this.browser) {
-      console.log('👋 [BROWSER] Cerrando navegador');
+      console.log('👋 [BROWSER] Cerrando navegador principal');
       await this.browser.close();
       this.browser = null;
       this.page = null;
       this.isLoggedIn = false;
+    }
+
+    if (this.browserAlt) {
+      console.log('👋 [BROWSER-ALT] Cerrando navegador alternativo');
+      await this.browserAlt.close();
+      this.browserAlt = null;
+      this.pageAlt = null;
+      this.isLoggedInAlt = false;
     }
   }
 
@@ -279,6 +399,10 @@ export class AutomationService {
       pageActive: this.page !== null,
       isLoggedIn: this.isLoggedIn,
       currentPageUrl: this.currentPageUrl,
+      browserAltActive: this.browserAlt !== null,
+      pageAltActive: this.pageAlt !== null,
+      isLoggedInAlt: this.isLoggedInAlt,
+      currentPageUrlAlt: this.currentPageUrlAlt,
     };
   }
 }

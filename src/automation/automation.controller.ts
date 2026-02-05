@@ -1,4 +1,3 @@
-// src/automation/automation.controller.ts
 import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
 import { AuthTokenGuard } from '../auth/auth.guard';
 import { 
@@ -120,7 +119,7 @@ export class AutomationController {
         browserActive: true,
         pageActive: true,
         isLoggedIn: true,
-        currentPageUrl: 'https://apppro.bcp.com.bo/Multiplica/Dashboard  ',
+        currentPageUrl: 'https://apppro.bcp.com.bo/Multiplica/Dashboard    ',
         message: 'Sesión activa y lista para descargar'
       }
     }
@@ -168,5 +167,47 @@ export class AutomationController {
       success: true,
       message: 'Navegador cerrado exitosamente'
     };
+  }
+
+  // NUEVO ENDPOINT ALTERNATIVO
+  @Post('download-and-send-alt')
+  @ApiOperation({ 
+    summary: 'Descargar Excel y enviar a Laravel (endpoint alternativo)',
+    description: 'Endpoint alternativo que ejecuta el mismo proceso de automatización pero con credenciales diferentes para el login'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        auth_token: {
+          type: 'string',
+          description: 'Token de autenticación único',
+          example: ''
+        }
+      },
+      required: ['auth_token'],
+    },
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Proceso completado exitosamente',
+    schema: {
+      example: { 
+        success: true, 
+        message: 'Excel descargado y enviado a Laravel exitosamente (usando credenciales alternativas)',
+        excelPath: '/ruta/descargas/Reporte_1234567890.xlsx',
+        laravelResponse: {
+          success: true,
+          message: 'Archivo procesado correctamente',
+          registros: 45
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+        reusedSession: true
+      }
+    }
+  })
+  async downloadAndSendToLaravelAlt(@Body() body: { auth_token: string }) {
+    console.log('🆕 [API] Endpoint alternativo ejecutado con credenciales diferentes');
+    return this.automationService.downloadExcelAndSendToLaravelAlt();
   }
 }
