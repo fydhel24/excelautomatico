@@ -39,50 +39,27 @@ export class AutomationService {
 
   private async randomDelay(min: number, max: number) {
     const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-    console.log(`⏳ [DELAY] ${delay} ms`);
     return new Promise(resolve => setTimeout(resolve, delay));
   }
 
   private async typeWithDelay(page: Page, selector: string, text: string) {
-    console.log(`⌨️ [TYPE] Escribiendo en ${selector}`);
-    await page.fill(selector, '');
-    for (const char of text) {
-      await page.keyboard.type(char);
-      await this.randomDelay(30, 70);
-    }
+    // Usar fill directamente para mayor velocidad
+    await page.fill(selector, text);
   }
 
   private async simulateHumanBehavior(page: Page) {
-    console.log('🧠 [HUMAN] Simulando comportamiento humano...');
-    await this.randomDelay(300, 600);
-
-    try {
-      await page.evaluate(() => window.scrollTo(0, 150));
-      await this.randomDelay(200, 400);
-      await page.evaluate(() => window.scrollTo(0, 0));
-      console.log('🧠 [HUMAN] Scroll simulado');
-    } catch {
-      console.log('⚠️ [HUMAN] Scroll omitido');
-    }
+    // Reducido: solo un pequeño delay
+    await this.randomDelay(50, 100);
   }
 
   /* ─────────── CHECK LOGIN ─────────── */
 
   private async isAlreadyLoggedIn(page: Page): Promise<boolean> {
-    console.log('🔍 [CHECK] Verificando si sesión está activa...');
     try {
       const logged =
         (await page.$('button[title="Exportar a Excel"]')) !== null;
-
-      console.log(
-        logged
-          ? '✅ [CHECK] Sesión activa detectada'
-          : '❌ [CHECK] Sesión NO activa',
-      );
-
       return logged;
     } catch {
-      console.log('⚠️ [CHECK] Error verificando login');
       return false;
     }
   }
@@ -90,8 +67,6 @@ export class AutomationService {
   /* ─────────── INIT BROWSER ─────────── */
 
   private async initializeBrowser(): Promise<{ browser: Browser; page: Page }> {
-    console.log('🚀 [BROWSER] Iniciando Chromium (headless)...');
-
     const browser = await chromium.launch({
       headless: false,
       args: [
@@ -103,7 +78,6 @@ export class AutomationService {
       ],
     });
 
-    console.log('🧩 [BROWSER] Creando contexto...');
     const context = await browser.newContext({
       acceptDownloads: true,
       viewport: { width: 1366, height: 768 },
@@ -121,31 +95,23 @@ export class AutomationService {
       });
     });
 
-    console.log('✅ [BROWSER] Navegador listo');
     return { browser, page };
   }
 
   /* ─────────── LOGIN PRINCIPAL ─────────── */
 
   private async performLogin(page: Page): Promise<boolean> {
-    console.log('🔐 [LOGIN] Iniciando proceso de login (credenciales principales)...');
-
     try {
       await page.goto(
         'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ',
         { waitUntil: 'domcontentloaded', timeout: 30000 },
       );
 
-      console.log('🌐 [LOGIN] Página de login cargada');
-
       await this.simulateHumanBehavior(page);
 
       // Credenciales principales
       await this.typeWithDelay(page, '#authname', 'CajaUno11929');
-      await this.randomDelay(150, 300);
       await this.typeWithDelay(page, '#authpass', '6ipzQ-5kOQ');
-
-      console.log('🖱️ [LOGIN] Enviando formulario...');
 
       await Promise.all([
         page.waitForNavigation({
@@ -158,9 +124,6 @@ export class AutomationService {
       this.isLoggedIn = true;
       this.currentPageUrl = page.url();
 
-      console.log('✅ [LOGIN] Login exitoso');
-      console.log(`📍 [LOGIN] URL actual: ${this.currentPageUrl}`);
-
       return true;
     } catch (error) {
       console.error('❌ [LOGIN] Error en login:', error.message);
@@ -171,24 +134,17 @@ export class AutomationService {
   /* ─────────── LOGIN ALTERNATIVO ─────────── */
 
   private async performLoginAlt(page: Page): Promise<boolean> {
-    console.log('🔐 [LOGIN-ALT] Iniciando proceso de login (credenciales alternativas)...');
-
     try {
       await page.goto(
         'https://apppro.bcp.com.bo/Multiplica/AuthIAM/Index  ',
         { waitUntil: 'domcontentloaded', timeout: 30000 },
       );
 
-      console.log('🌐 [LOGIN-ALT] Página de login cargada');
-
       await this.simulateHumanBehavior(page);
 
-      // Credenciales alternativas - REEMPLAZA ESTOS VALORES CON LAS CREDENCIALES REALES
+      // Credenciales alternativas
       await this.typeWithDelay(page, '#authname', 'CajaLive114559');
-      await this.randomDelay(150, 300);
       await this.typeWithDelay(page, '#authpass', 'hXDfP-cj2w');
-
-      console.log('🖱️ [LOGIN-ALT] Enviando formulario...');
 
       await Promise.all([
         page.waitForNavigation({
@@ -201,9 +157,6 @@ export class AutomationService {
       this.isLoggedInAlt = true;
       this.currentPageUrlAlt = page.url();
 
-      console.log('✅ [LOGIN-ALT] Login exitoso');
-      console.log(`📍 [LOGIN-ALT] URL actual: ${this.currentPageUrlAlt}`);
-
       return true;
     } catch (error) {
       console.error('❌ [LOGIN-ALT] Error en login:', error.message);
@@ -214,24 +167,19 @@ export class AutomationService {
   /* ─────────── REFRESH ─────────── */
 
   private async refreshPageForLatestData(page: Page) {
-    console.log('🔄 [REFRESH] Recargando página...');
     await page.reload({
       waitUntil: 'domcontentloaded',
       timeout: 20000,
     });
-    await this.randomDelay(600, 900);
-    console.log('✅ [REFRESH] Página actualizada');
+    await this.randomDelay(200, 400);
   }
 
   /* ─────────── MAIN PRINCIPAL ─────────── */
 
   async downloadExcelAndSendToLaravel() {
-    console.log('▶️ [START] Proceso iniciado (credenciales principales)');
-
     let excelPath = '';
 
     if (!this.browser || !this.page) {
-      console.log('🆕 [SESSION] Nueva sesión principal');
       const init = await this.initializeBrowser();
       this.browser = init.browser;
       this.page = init.page;
@@ -240,10 +188,7 @@ export class AutomationService {
         throw new Error('Falló el login con credenciales principales');
       }
     } else {
-      console.log('♻️ [SESSION] Reutilizando sesión principal');
-
       if (!(await this.isAlreadyLoggedIn(this.page))) {
-        console.log('🔑 [SESSION] Sesión expirada, relogin');
         if (!(await this.performLogin(this.page))) {
           throw new Error('Falló el login con credenciales principales');
         }
@@ -252,11 +197,9 @@ export class AutomationService {
       }
     }
 
-    console.log('📊 [EXCEL] Buscando botón Exportar...');
     const excelBtn = 'button[title="Exportar a Excel"]';
     await this.page!.waitForSelector(excelBtn, { timeout: 20000 });
 
-    console.log('⬇️ [EXCEL] Descargando archivo...');
     const [download] = await Promise.all([
       this.page!.waitForEvent('download', { timeout: 30000 }),
       this.page!.click(excelBtn),
@@ -268,12 +211,8 @@ export class AutomationService {
     );
 
     await download.saveAs(excelPath);
-    console.log(`✅ [EXCEL] Guardado en ${excelPath}`);
 
-    console.log('📤 [LARAVEL] Enviando archivo...');
     const laravelResponse = await this.sendExcelToLaravel(excelPath);
-
-    console.log('🏁 [END] Proceso completado (credenciales principales)');
 
     return {
       success: true,
@@ -288,12 +227,9 @@ export class AutomationService {
   /* ─────────── MAIN ALTERNATIVO ─────────── */
 
   async downloadExcelAndSendToLaravelAlt() {
-    console.log('▶️ [START] Proceso iniciado (credenciales alternativas)');
-
     let excelPath = '';
 
     if (!this.browserAlt || !this.pageAlt) {
-      console.log('🆕 [SESSION-ALT] Nueva sesión alternativa');
       const init = await this.initializeBrowser();
       this.browserAlt = init.browser;
       this.pageAlt = init.page;
@@ -302,10 +238,7 @@ export class AutomationService {
         throw new Error('Falló el login con credenciales alternativas');
       }
     } else {
-      console.log('♻️ [SESSION-ALT] Reutilizando sesión alternativa');
-
       if (!(await this.isAlreadyLoggedIn(this.pageAlt))) {
-        console.log('🔑 [SESSION-ALT] Sesión expirada, relogin');
         if (!(await this.performLoginAlt(this.pageAlt))) {
           throw new Error('Falló el login con credenciales alternativas');
         }
@@ -314,11 +247,9 @@ export class AutomationService {
       }
     }
 
-    console.log('📊 [EXCEL-ALT] Buscando botón Exportar...');
     const excelBtn = 'button[title="Exportar a Excel"]';
     await this.pageAlt!.waitForSelector(excelBtn, { timeout: 20000 });
 
-    console.log('⬇️ [EXCEL-ALT] Descargando archivo...');
     const [download] = await Promise.all([
       this.pageAlt!.waitForEvent('download', { timeout: 30000 }),
       this.pageAlt!.click(excelBtn),
@@ -330,12 +261,8 @@ export class AutomationService {
     );
 
     await download.saveAs(excelPath);
-    console.log(`✅ [EXCEL-ALT] Guardado en ${excelPath}`);
 
-    console.log('📤 [LARAVEL-ALT] Enviando archivo...');
     const laravelResponse = await this.sendExcelToLaravel(excelPath);
-
-    console.log('🏁 [END] Proceso completado (credenciales alternativas)');
 
     return {
       success: true,
@@ -350,12 +277,9 @@ export class AutomationService {
   /* ─────────── MAIN CON FILTRO FECHA (CAJALIVE) ─────────── */
 
   async downloadExcelWithDateFilter(fecha: string) {
-    console.log(`▶️ [START] Proceso iniciado con filtro de fecha: ${fecha}`);
-
     let excelPath = '';
 
     if (!this.browserAlt || !this.pageAlt) {
-      console.log('🆕 [SESSION-FILTER] Nueva sesión con filtro de fecha');
       const init = await this.initializeBrowser();
       this.browserAlt = init.browser;
       this.pageAlt = init.page;
@@ -364,10 +288,7 @@ export class AutomationService {
         throw new Error('Falló el login con credenciales alternativas');
       }
     } else {
-      console.log('♻️ [SESSION-FILTER] Reutilizando sesión alternativa');
-
       if (!(await this.isAlreadyLoggedIn(this.pageAlt))) {
-        console.log('🔑 [SESSION-FILTER] Sesión expirada, relogin');
         if (!(await this.performLoginAlt(this.pageAlt))) {
           throw new Error('Falló el login con credenciales alternativas');
         }
@@ -377,14 +298,11 @@ export class AutomationService {
     }
 
     // Aplicar filtro de fecha antes de descargar
-    console.log('📅 [FILTER] Aplicando filtro de fecha...');
     await this.filterByDate(this.pageAlt!, fecha);
 
-    console.log('📊 [EXCEL-FILTER] Buscando botón Exportar...');
     const excelBtn = 'button[title="Exportar a Excel"]';
     await this.pageAlt!.waitForSelector(excelBtn, { timeout: 20000 });
 
-    console.log('⬇️ [EXCEL-FILTER] Descargando archivo...');
     const [download] = await Promise.all([
       this.pageAlt!.waitForEvent('download', { timeout: 30000 }),
       this.pageAlt!.click(excelBtn),
@@ -396,12 +314,8 @@ export class AutomationService {
     );
 
     await download.saveAs(excelPath);
-    console.log(`✅ [EXCEL-FILTER] Guardado en ${excelPath}`);
 
-    console.log('📤 [LARAVEL-FILTER] Enviando archivo...');
     const laravelResponse = await this.sendExcelToLaravel(excelPath);
-
-    console.log('🏁 [END] Proceso completado con filtro de fecha');
 
     return {
       success: true,
@@ -417,34 +331,28 @@ export class AutomationService {
   /* ─────────── FILTRO FECHA ─────────── */
 
   private async filterByDate(page: Page, fecha: string): Promise<boolean> {
-    console.log(`📅 [DATE] Filtrando por fecha: ${fecha}`);
-    
     try {
       // Esperar a que el input de fecha esté disponible
       await page.waitForSelector('#startDate1', { timeout: 10000 });
       
       // Establecer el valor directamente usando JavaScript
-      console.log('📝 [DATE] Estableciendo valor directamente...');
       await page.evaluate((fechaValue) => {
         const input = document.getElementById('startDate1') as HTMLInputElement;
         if (input) {
           input.value = fechaValue;
-          // Disparar eventos para que el sistema detecte el cambio
           input.dispatchEvent(new Event('change', { bubbles: true }));
           input.dispatchEvent(new Event('input', { bubbles: true }));
         }
       }, fecha);
       
-      await this.randomDelay(500, 800);
+      await this.randomDelay(200, 400);
       
       // Hacer click en el botón "Actualizar Reporte"
-      console.log('🖱️ [DATE] Haciendo click en "Actualizar Reporte"...');
       await page.click('#fondoreportes');
       
       // Esperar a que la página se actualice
-      await this.randomDelay(2000, 3000);
+      await this.randomDelay(1000, 1500);
       
-      console.log('✅ [DATE] Filtro de fecha aplicado');
       return true;
     } catch (error) {
       console.error('❌ [DATE] Error al filtrar por fecha:', error.message);
@@ -465,14 +373,12 @@ export class AutomationService {
       maxBodyLength: Infinity,
     });
 
-    console.log('✅ [LARAVEL] Archivo enviado correctamente');
     return response.data;
   }
 
   /* ─────────── API PÚBLICA ─────────── */
 
   setLaravelApiUrl(url: string) {
-    console.log(`🔧 [CONFIG] Laravel URL actualizada: ${url}`);
     this.laravelApiUrl = url;
   }
 
@@ -482,7 +388,6 @@ export class AutomationService {
 
   async closeBrowser() {
     if (this.browser) {
-      console.log('👋 [BROWSER] Cerrando navegador principal');
       await this.browser.close();
       this.browser = null;
       this.page = null;
@@ -490,7 +395,6 @@ export class AutomationService {
     }
 
     if (this.browserAlt) {
-      console.log('👋 [BROWSER-ALT] Cerrando navegador alternativo');
       await this.browserAlt.close();
       this.browserAlt = null;
       this.pageAlt = null;
