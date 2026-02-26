@@ -93,7 +93,7 @@ export class AutomationService {
     console.log('🚀 [BROWSER] Iniciando Chromium (headless)...');
 
     const browser = await chromium.launch({
-      headless: true,
+      headless: false,
       args: [
         '--no-sandbox',
         '--disable-dev-shm-usage',
