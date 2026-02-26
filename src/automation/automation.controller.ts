@@ -210,4 +210,58 @@ export class AutomationController {
     console.log('🆕 [API] Endpoint alternativo ejecutado con credenciales diferentes');
     return this.automationService.downloadExcelAndSendToLaravelAlt();
   }
+
+  // ENDPOINT CON FILTRO DE FECHA
+  @Post('download-with-date-filter')
+  @ApiOperation({ 
+    summary: 'Descargar Excel con filtro de fecha (CajaLive)',
+    description: 'Ejecuta el proceso de automatización con credenciales de CajaLive114559, filtra los datos por la fecha especificada, actualiza el reporte y luego descarga el Excel'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fecha: { 
+          type: 'string', 
+          description: 'Fecha para filtrar el reporte en formato YYYY-MM-DD',
+          example: '2026-02-26' 
+        },
+        auth_token: {
+          type: 'string',
+          description: 'Token de autenticación único',
+          example: ''
+        }
+      },
+      required: ['fecha', 'auth_token'],
+    },
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Proceso completado exitosamente con filtro de fecha',
+    schema: {
+      example: { 
+        success: true, 
+        message: 'Excel descargado con filtro de fecha y enviado a Laravel exitosamente',
+        excelPath: '/ruta/descargas/ReporteFilter_1234567890.xlsx',
+        fechaFiltro: '2026-02-26',
+        laravelResponse: {
+          success: true,
+          message: 'Archivo procesado correctamente',
+          registros: 45
+        },
+        timestamp: '2024-01-15T10:30:00.000Z',
+        reusedSession: false
+      }
+    }
+  })
+  async downloadWithDateFilter(@Body() body: { fecha: string; auth_token: string }) {
+    if (!body.fecha) {
+      return {
+        success: false,
+        message: 'El campo "fecha" es requerido en formato YYYY-MM-DD'
+      };
+    }
+    console.log('📅 [API] Descarga con filtro de fecha ejecutada');
+    return this.automationService.downloadExcelWithDateFilter(body.fecha);
+  }
 }

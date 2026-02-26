@@ -347,6 +347,106 @@ export class AutomationService {
     };
   }
 
+  /* ─────────── MAIN CON FILTRO FECHA (CAJALIVE) ─────────── */
+
+  async downloadExcelWithDateFilter(fecha: string) {
+    console.log(`▶️ [START] Proceso iniciado con filtro de fecha: ${fecha}`);
+
+    let excelPath = '';
+
+    if (!this.browserAlt || !this.pageAlt) {
+      console.log('🆕 [SESSION-FILTER] Nueva sesión con filtro de fecha');
+      const init = await this.initializeBrowser();
+      this.browserAlt = init.browser;
+      this.pageAlt = init.page;
+
+      if (!(await this.performLoginAlt(this.pageAlt))) {
+        throw new Error('Falló el login con credenciales alternativas');
+      }
+    } else {
+      console.log('♻️ [SESSION-FILTER] Reutilizando sesión alternativa');
+
+      if (!(await this.isAlreadyLoggedIn(this.pageAlt))) {
+        console.log('🔑 [SESSION-FILTER] Sesión expirada, relogin');
+        if (!(await this.performLoginAlt(this.pageAlt))) {
+          throw new Error('Falló el login con credenciales alternativas');
+        }
+      } else {
+        await this.refreshPageForLatestData(this.pageAlt);
+      }
+    }
+
+    // Aplicar filtro de fecha antes de descargar
+    console.log('📅 [FILTER] Aplicando filtro de fecha...');
+    await this.filterByDate(this.pageAlt!, fecha);
+
+    console.log('📊 [EXCEL-FILTER] Buscando botón Exportar...');
+    const excelBtn = 'button[title="Exportar a Excel"]';
+    await this.pageAlt!.waitForSelector(excelBtn, { timeout: 20000 });
+
+    console.log('⬇️ [EXCEL-FILTER] Descargando archivo...');
+    const [download] = await Promise.all([
+      this.pageAlt!.waitForEvent('download', { timeout: 30000 }),
+      this.pageAlt!.click(excelBtn),
+    ]);
+
+    excelPath = path.join(
+      this.downloadPath,
+      `ReporteFilter_${Date.now()}.xlsx`,
+    );
+
+    await download.saveAs(excelPath);
+    console.log(`✅ [EXCEL-FILTER] Guardado en ${excelPath}`);
+
+    console.log('📤 [LARAVEL-FILTER] Enviando archivo...');
+    const laravelResponse = await this.sendExcelToLaravel(excelPath);
+
+    console.log('🏁 [END] Proceso completado con filtro de fecha');
+
+    return {
+      success: true,
+      message: 'Excel descargado con filtro de fecha y enviado a Laravel exitosamente',
+      excelPath,
+      fechaFiltro: fecha,
+      laravelResponse,
+      timestamp: new Date().toISOString(),
+      reusedSession: this.isLoggedInAlt,
+    };
+  }
+
+  /* ─────────── FILTRO FECHA ─────────── */
+
+  private async filterByDate(page: Page, fecha: string): Promise<boolean> {
+    console.log(`📅 [DATE] Filtrando por fecha: ${fecha}`);
+    
+    try {
+      // Esperar a que el input de fecha esté disponible
+      await page.waitForSelector('#startDate1', { timeout: 10000 });
+      
+      // Limpiar y escribir la nueva fecha
+      await page.fill('#startDate1', '');
+      await this.randomDelay(200, 400);
+      
+      // Usar typeWithDelay para simular escritura humana
+      await this.typeWithDelay(page, '#startDate1', fecha);
+      
+      await this.randomDelay(300, 500);
+      
+      // Hacer click en el botón "Actualizar Reporte"
+      console.log('🖱️ [DATE] Haciendo click en "Actualizar Reporte"...');
+      await page.click('#fondoreportes');
+      
+      // Esperar a que la página se actualice
+      await this.randomDelay(1500, 2500);
+      
+      console.log('✅ [DATE] Filtro de fecha aplicado');
+      return true;
+    } catch (error) {
+      console.error('❌ [DATE] Error al filtrar por fecha:', error.message);
+      return false;
+    }
+  }
+
   /* ─────────── LARAVEL ─────────── */
 
   private async sendExcelToLaravel(excelPath: string) {
