@@ -174,6 +174,38 @@ export class AutomationService {
     await this.randomDelay(200, 400);
   }
 
+  /* ─────────── ELIMINAR ARCHIVO ─────────── */
+
+  private async deleteFile(filePath: string): Promise<void> {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`🗑️ [DELETE] Archivo eliminado: ${filePath}`);
+      }
+    } catch (error) {
+      console.error(`❌ [DELETE] Error al eliminar archivo:`, error.message);
+    }
+  }
+
+  /* ─────────── LARAVEL ─────────── */
+
+  private async sendExcelToLaravel(excelPath: string) {
+    const formData = new FormData();
+    formData.append('archivo_excel', fs.createReadStream(excelPath));
+    formData.append('origen', 'nestjs');
+
+    const response = await axios.post(this.laravelApiUrl, formData, {
+      headers: formData.getHeaders(),
+      timeout: 30000,
+      maxBodyLength: Infinity,
+    });
+
+    // Eliminar archivo después de enviar a Laravel
+    await this.deleteFile(excelPath);
+
+    return response.data;
+  }
+
   /* ─────────── MAIN PRINCIPAL ─────────── */
 
   async downloadExcelAndSendToLaravel() {
@@ -358,22 +390,6 @@ export class AutomationService {
       console.error('❌ [DATE] Error al filtrar por fecha:', error.message);
       return false;
     }
-  }
-
-  /* ─────────── LARAVEL ─────────── */
-
-  private async sendExcelToLaravel(excelPath: string) {
-    const formData = new FormData();
-    formData.append('archivo_excel', fs.createReadStream(excelPath));
-    formData.append('origen', 'nestjs');
-
-    const response = await axios.post(this.laravelApiUrl, formData, {
-      headers: formData.getHeaders(),
-      timeout: 30000,
-      maxBodyLength: Infinity,
-    });
-
-    return response.data;
   }
 
   /* ─────────── API PÚBLICA ─────────── */
