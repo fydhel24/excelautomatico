@@ -14,7 +14,7 @@ chromium.use(StealthPlugin());
 export class AutomationService {
   private downloadPath: string;
   private laravelApiUrl: string =
-    'https://importadoramiranda.com/api/movimientos/importar-desde-nestjs  ';
+    'https://test.importadoramiranda.com/api/movimientos/importar-desde-nestjs  ';
 
   private browser: Browser | null = null;
   private page: Page | null = null;
@@ -423,21 +423,26 @@ export class AutomationService {
       // Esperar a que el input de fecha esté disponible
       await page.waitForSelector('#startDate1', { timeout: 10000 });
       
-      // Limpiar y escribir la nueva fecha
-      await page.fill('#startDate1', '');
-      await this.randomDelay(200, 400);
+      // Establecer el valor directamente usando JavaScript
+      console.log('📝 [DATE] Estableciendo valor directamente...');
+      await page.evaluate((fechaValue) => {
+        const input = document.getElementById('startDate1') as HTMLInputElement;
+        if (input) {
+          input.value = fechaValue;
+          // Disparar eventos para que el sistema detecte el cambio
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, fecha);
       
-      // Usar typeWithDelay para simular escritura humana
-      await this.typeWithDelay(page, '#startDate1', fecha);
-      
-      await this.randomDelay(300, 500);
+      await this.randomDelay(500, 800);
       
       // Hacer click en el botón "Actualizar Reporte"
       console.log('🖱️ [DATE] Haciendo click en "Actualizar Reporte"...');
       await page.click('#fondoreportes');
       
       // Esperar a que la página se actualice
-      await this.randomDelay(1500, 2500);
+      await this.randomDelay(2000, 3000);
       
       console.log('✅ [DATE] Filtro de fecha aplicado');
       return true;
